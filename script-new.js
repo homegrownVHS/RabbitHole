@@ -46,13 +46,17 @@ class RabbitHole {
         const ringSpacing = 12;
         
         // Generate enough rings to fill the depth
-        for (let i = 0; i < 120; i++) {
-            // Each ring starts at a base position
-            let z = 60 + (i * ringSpacing) - this.offset;
+        const totalRings = 120;
+        const loopDistance = totalRings * ringSpacing;
+        
+        for (let i = 0; i < totalRings; i++) {
+            // Each ring has a base position that wraps seamlessly
+            const basePosition = (i * ringSpacing) - (this.offset % loopDistance);
+            let z = 60 + basePosition;
             
-            // When a ring gets too close, teleport it to the back
+            // Wrap to create infinite loop
             if (z < 50) {
-                z += 120 * ringSpacing;
+                z += loopDistance;
             }
             
             // Skip if too far away
