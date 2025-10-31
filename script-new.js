@@ -51,24 +51,22 @@ class RabbitHoleTunnel {
         this.tunnelSegments = [];
         this.createTunnel();
         
-        // Modern lighting setup
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+        // Modern lighting setup - balanced
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
         this.scene.add(ambientLight);
         
-        // Main point light with shadows
-        this.mainLight = new THREE.PointLight(0xffffff, 1.5, 70);
+        // Main point light - no shadows to avoid dark sweeping effect
+        this.mainLight = new THREE.PointLight(0xffffff, 2.0, 70);
         this.mainLight.position.set(0, 0, 5);
-        this.mainLight.castShadow = true;
-        this.mainLight.shadow.mapSize.width = 1024;
-        this.mainLight.shadow.mapSize.height = 1024;
+        this.mainLight.castShadow = false;
         this.scene.add(this.mainLight);
         
         // Add colored rim lights for depth
-        this.rimLight1 = new THREE.PointLight(0xff6b35, 0.5, 40);
+        this.rimLight1 = new THREE.PointLight(0xff6b35, 0.6, 40);
         this.rimLight1.position.set(3, 2, -10);
         this.scene.add(this.rimLight1);
         
-        this.rimLight2 = new THREE.PointLight(0x3498db, 0.5, 40);
+        this.rimLight2 = new THREE.PointLight(0x3498db, 0.6, 40);
         this.rimLight2.position.set(-3, -2, -20);
         this.scene.add(this.rimLight2);
         
@@ -76,6 +74,17 @@ class RabbitHoleTunnel {
         this.speed = 0.05;
         this.tunnelOffset = 0;
         this.time = 0;
+        
+        // Wiggle parameters
+        this.wiggleParams = {
+            freq1: 8,
+            speed1: 3,
+            amp1Radial: 0.0,  // Radial displacement (causes seam)
+            amp1Tangential: 0.28, // Tangential displacement (smooth wiggle)
+            freq2: 0.2,
+            speed2: 1,
+            amp2: 0.5
+        };
         
         window.addEventListener('resize', () => this.resize());
         this.animate();
@@ -186,8 +195,18 @@ class RabbitHoleTunnel {
             const z = -i * segmentLength;
             const colorIndex = i % this.colors.length;
             
-            // Create ring geometry (torus shape)
-            const geometry = new THREE.TorusGeometry(radius, 0.15, 16, radialSegments);
+            // Create ring geometry (torus shape) with higher segment count for deformation
+            const geometry = new THREE.TorusGeometry(radius, 0.15, 16, 64);
+            
+            // Store original positions for animation
+            const positions = geometry.attributes.position;
+            const originalPositions = new Float32Array(positions.count * 3);
+            for (let j = 0; j < positions.count; j++) {
+                originalPositions[j * 3] = positions.getX(j);
+                originalPositions[j * 3 + 1] = positions.getY(j);
+                originalPositions[j * 3 + 2] = positions.getZ(j);
+            }
+            geometry.userData.originalPositions = originalPositions;
             
             // Modern PBR material with varied textures per ring
             const textureIndex = i % this.leatherTextures.length;
@@ -207,8 +226,8 @@ class RabbitHoleTunnel {
             });
             
             const ring = new THREE.Mesh(geometry, material);
-            ring.castShadow = true;
-            ring.receiveShadow = true;
+            ring.castShadow = false;
+            ring.receiveShadow = false;
             
             // Curve the tunnel - quick sharp turns left and right
             const curveX = Math.sin(Math.abs(z) * 0.08) * Math.abs(z) * 0.12;
@@ -263,25 +282,56 @@ class RabbitHoleTunnel {
         this.camera.rotation.x = cameraPitch;
         this.camera.rotation.y = cameraYaw;
         
-        // Animate lights for varied lighting
+        // Animate lights position only - keep intensity constant
         const time = Date.now() * 0.001;
         this.rimLight1.position.x = Math.sin(time * 0.5) * 4;
         this.rimLight1.position.y = Math.cos(time * 0.3) * 3;
-        this.rimLight1.intensity = 0.4 + Math.sin(time * 0.7) * 0.2;
         
         this.rimLight2.position.x = Math.cos(time * 0.4) * 4;
         this.rimLight2.position.y = Math.sin(time * 0.6) * 3;
-        this.rimLight2.intensity = 0.4 + Math.cos(time * 0.5) * 0.2;
         
         // Update ring positions for infinite loop - rings move toward camera
-        this.tunnelSegments.forEach(segment => {
-            segment.mesh.position.z += this.speed;
+        this.tunnelSegments.forEach((segment, index) => {
+            segment.mesh.position.z += organicSpeed;
             
             // Update curve position - quick sharp turns
             const z = segment.mesh.position.z;
             const curveX = Math.sin(Math.abs(z) * 0.08) * Math.abs(z) * 0.12;
             segment.mesh.position.x = curveX;
             segment.mesh.position.y = 0;
+            
+            // Apply sine wave wiggle to vertices
+            const geometry = segment.mesh.geometry;
+            const positions = geometry.attributes.position;
+            const originalPositions = geometry.userData.originalPositions;
+            
+            if (originalPositions) {
+                for (let i = 0; i < positions.count; i++) {
+                    const angle = (i / positions.count) * Math.PI * 2;
+                    const wave1 = Math.sin(angle * this.wiggleParams.freq1 + this.time * this.wiggleParams.speed1);
+                    const wave2 = Math.sin(angle * this.wiggleParams.freq2 - this.time * this.wiggleParams.speed2);
+                    
+                    const x = originalPositions[i * 3];
+                    const y = originalPositions[i * 3 + 1];
+                    const z = originalPositions[i * 3 + 2];
+                    
+                    // Apply radial displacement (scales out from center)
+                    const radialOffset = wave1 * this.wiggleParams.amp1Radial + wave2 * this.wiggleParams.amp2;
+                    
+                    // Apply tangential displacement (rotates around)
+                    const tangentOffset = wave1 * this.wiggleParams.amp1Tangential;
+                    
+                    const length = Math.sqrt(x * x + y * y);
+                    if (length > 0) {
+                        const radialScale = 1 + radialOffset;
+                        const newX = x * radialScale - y * tangentOffset;
+                        const newY = y * radialScale + x * tangentOffset;
+                        positions.setXYZ(i, newX, newY, z);
+                    }
+                }
+                positions.needsUpdate = true;
+                geometry.computeVertexNormals();
+            }
             
             // Reset rings that pass the camera
             if (segment.mesh.position.z > 10) {
