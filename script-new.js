@@ -23,20 +23,20 @@ class RabbitHoleTunnel {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         
-        // Color palette
+        // Color palette - all vibrant colors
         this.colors = [
-            0x8B4513, // Saddle brown
-            0xA0522D, // Sienna  
-            0xCD853F, // Peru
-            0xD2691E, // Chocolate
-            0xDEB887, // Burlywood
-            0xF4A460, // Sandy brown
+            0xFF1744, // Neon red
             0xFF6B35, // Vibrant orange
             0xFF8C42, // Bright tangerine
-            0xC44569, // Deep rose
-            0x9B59B6, // Purple
+            0xFFD700, // Gold
+            0x00FF00, // Lime green
+            0x1ABC9C, // Turquoise
+            0x00FFFF, // Cyan
             0x3498DB, // Blue
-            0x1ABC9C  // Turquoise
+            0x9B59B6, // Purple
+            0xFF00FF, // Magenta
+            0xC44569, // Deep rose
+            0xFF1493  // Deep pink
         ];
         
         // Create multiple leather texture variations
@@ -75,6 +75,7 @@ class RabbitHoleTunnel {
         // Animation properties
         this.speed = 0.08;
         this.tunnelOffset = 0;
+        this.time = 0;
         
         window.addEventListener('resize', () => this.resize());
         this.animate();
@@ -209,10 +210,9 @@ class RabbitHoleTunnel {
             ring.castShadow = true;
             ring.receiveShadow = true;
             
-            // Curve the tunnel - spiral path
-            const curveX = Math.sin(Math.abs(z) * 0.05) * Math.abs(z) * 0.15;
-            const curveY = Math.cos(Math.abs(z) * 0.05) * Math.abs(z) * 0.15;
-            ring.position.set(curveX, curveY, z);
+            // Curve the tunnel - quick sharp turns left and right
+            const curveX = Math.sin(Math.abs(z) * 0.08) * Math.abs(z) * 0.12;
+            ring.position.set(curveX, 0, z);
             
             // Rings face the camera (perpendicular to Z axis)
             
@@ -234,8 +234,34 @@ class RabbitHoleTunnel {
     animate() {
         requestAnimationFrame(() => this.animate());
         
-        // Move through tunnel
-        this.tunnelOffset += this.speed;
+        this.time += 0.016; // Approximate frame time
+        
+        // Organic variable speed - breathe in and out with more variation
+        const speedVariation = Math.sin(this.time * 0.3) * 0.05 + 
+                               Math.sin(this.time * 0.7) * 0.03 +
+                               Math.sin(this.time * 1.2) * 0.02;
+        const organicSpeed = this.speed + speedVariation;
+        this.tunnelOffset += organicSpeed;
+        
+        // Complex camera sway - multiple frequency layers for organic tumbling
+        const cameraSwayX = Math.sin(this.time * 0.4) * 0.5 + 
+                           Math.sin(this.time * 0.9) * 0.25 +
+                           Math.sin(this.time * 1.3) * 0.15;
+        const cameraSwayY = Math.cos(this.time * 0.5) * 0.45 + 
+                           Math.cos(this.time * 0.8) * 0.2 +
+                           Math.cos(this.time * 1.5) * 0.1;
+        const cameraRoll = Math.sin(this.time * 0.3) * 0.12 + 
+                          Math.sin(this.time * 0.85) * 0.06;
+        
+        // Add pitch and yaw rotation for more dynamic falling sensation
+        const cameraPitch = Math.sin(this.time * 0.35) * 0.08;
+        const cameraYaw = Math.cos(this.time * 0.42) * 0.1;
+        
+        this.camera.position.x = cameraSwayX;
+        this.camera.position.y = cameraSwayY;
+        this.camera.rotation.z = cameraRoll;
+        this.camera.rotation.x = cameraPitch;
+        this.camera.rotation.y = cameraYaw;
         
         // Animate lights for varied lighting
         const time = Date.now() * 0.001;
@@ -251,12 +277,11 @@ class RabbitHoleTunnel {
         this.tunnelSegments.forEach(segment => {
             segment.mesh.position.z += this.speed;
             
-            // Update curve position as rings move along spiral path
+            // Update curve position - quick sharp turns
             const z = segment.mesh.position.z;
-            const curveX = Math.sin(Math.abs(z) * 0.05) * Math.abs(z) * 0.15;
-            const curveY = Math.cos(Math.abs(z) * 0.05) * Math.abs(z) * 0.15;
+            const curveX = Math.sin(Math.abs(z) * 0.08) * Math.abs(z) * 0.12;
             segment.mesh.position.x = curveX;
-            segment.mesh.position.y = curveY;
+            segment.mesh.position.y = 0;
             
             // Reset rings that pass the camera
             if (segment.mesh.position.z > 10) {
