@@ -71,8 +71,9 @@ class RabbitHoleTunnel {
         this.rimLight2.position.set(-3, -2, -20);
         this.scene.add(this.rimLight2);
         
-        // Animation properties
-        this.speed = 0.05;
+    // Animation properties
+    // Lower base speed so tunnel movement feels less frantic on slower machines
+    this.speed = 0.03;
         this.tunnelOffset = 0;
         this.time = 0;
         
@@ -191,6 +192,9 @@ class RabbitHoleTunnel {
     createTunnel() {
         const segmentLength = 0.5;
     const numSegments = 120; // reduced for performance
+        // expose for animation/reset logic
+        this.segmentLength = segmentLength;
+        this.numSegments = numSegments;
         const radius = 3;
     const shapesPerRing = 12; // fewer shapes per ring to cut draw calls
         
@@ -363,8 +367,10 @@ class RabbitHoleTunnel {
         const speedVariation = (Math.sin(this.time * 0.3) * 0.5 + 0.5) * 0.02 + 
                                (Math.sin(this.time * 0.7) * 0.5 + 0.5) * 0.015 +
                                (Math.sin(this.time * 1.2) * 0.5 + 0.5) * 0.01;
-        const organicSpeed = this.speed + speedVariation;
-        this.tunnelOffset += organicSpeed;
+    // Clamp overall forward speed so the tunnel never goes too fast
+    let organicSpeed = this.speed + speedVariation;
+    organicSpeed = Math.max(0.01, Math.min(organicSpeed, 0.045));
+    this.tunnelOffset += organicSpeed;
         
         // Complex camera sway - multiple frequency layers for organic tumbling
         const cameraSwayX = Math.sin(this.time * 0.4) * 0.5 + 
@@ -414,9 +420,9 @@ class RabbitHoleTunnel {
                 });
             }
             
-            // Reset rings that pass the camera
+            // Reset rings that pass the camera - shift back by full tunnel length to preserve spacing
             if (segment.mesh.position.z > 10) {
-                segment.mesh.position.z = -90;
+                segment.mesh.position.z -= (this.segmentLength * this.numSegments);
             }
         });
         
