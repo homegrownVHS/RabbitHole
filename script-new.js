@@ -40,10 +40,13 @@ class RabbitHoleTunnel {
             0xFF1493  // Deep pink
         ];
         
-        // LED textures for inset screens (generated canvases)
-        this.ledCanvases = [];
-        this.ledTextures = [];
-        this.createLedTextures(8);
+        // Create multiple leather texture variations
+        this.leatherTextures = [];
+        this.leatherNormalMaps = [];
+        for (let i = 0; i < 5; i++) {
+            this.leatherTextures.push(this.createLeatherTexture(i));
+            this.leatherNormalMaps.push(this.createLeatherNormalMap(i));
+        }
         
         // Create tunnel segments
         this.tunnelSegments = [];
@@ -185,29 +188,6 @@ class RabbitHoleTunnel {
         normalMap.repeat.set(3, 1); // Match texture repeat for consistency
         return normalMap;
     }
-
-    createLedTextures(count = 6) {
-        for (let k = 0; k < count; k++) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            // Fill black background with scanlines
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            for (let y = 0; y < canvas.height; y += 2) {
-                ctx.fillStyle = 'rgba(255,255,255,0.03)';
-                ctx.fillRect(0, y, canvas.width, 1);
-            }
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.minFilter = THREE.LinearFilter;
-            texture.magFilter = THREE.LinearFilter;
-            texture.wrapS = THREE.ClampToEdgeWrapping;
-            texture.wrapT = THREE.ClampToEdgeWrapping;
-            this.ledCanvases.push({canvas, ctx, seed: Math.random() * 10});
-            this.ledTextures.push(texture);
-        }
-    }
     
     createTunnel() {
         const segmentLength = 0.5;
@@ -216,7 +196,7 @@ class RabbitHoleTunnel {
         this.segmentLength = segmentLength;
         this.numSegments = numSegments;
         const radius = 3;
-    const shapesPerRing = 24; // increased shapes per ring for denser tunnel
+    const shapesPerRing = 12; // fewer shapes per ring to cut draw calls
         
         for (let i = 0; i < numSegments; i++) {
             const z = -i * segmentLength;
@@ -224,43 +204,25 @@ class RabbitHoleTunnel {
             
             // Create a group to hold all shapes in this ring
             const ringGroup = new THREE.Group();
+            const individualShapes = []; // Track individual shapes for rotation
             
-            // Modern PBR material setup (no leather textures) - clean retro-future look
-            const roughnessVar = 0.15 + (Math.sin(i * 0.5) * 0.5 + 0.5) * 0.25;
-            const metalnessVar = 0.6 + (Math.cos(i * 0.3) * 0.5 + 0.5) * 0.2;
+            // Modern PBR material setup
+            const textureIndex = i % this.leatherTextures.length;
+            const roughnessVar = 0.2 + (Math.sin(i * 0.5) * 0.5 + 0.5) * 0.3;
+            const metalnessVar = 0.4 + (Math.cos(i * 0.3) * 0.5 + 0.5) * 0.3;
+            
             const material = new THREE.MeshStandardMaterial({
                 color: this.colors[colorIndex],
+                map: this.leatherTextures[textureIndex],
+                normalMap: this.leatherNormalMaps[textureIndex],
+                normalScale: new THREE.Vector2(1.5 + Math.sin(i) * 0.5, 1.5 + Math.sin(i) * 0.5),
                 roughness: roughnessVar,
                 metalness: metalnessVar,
-                envMapIntensity: 0.9,
-                emissive: 0x000000,
-                emissiveIntensity: 0.0
+                envMapIntensity: 0.8,
+                emissive: this.colors[colorIndex],
+                emissiveIntensity: 0.1 + Math.sin(i * 0.2) * 0.05
             });
             
-            // Prepare a single InstancedMesh for all cubes in this ring (much fewer draw calls)
-            const boxW = 0.5;
-            const boxH = 0.6;
-            const boxD = 0.4;
-            const boxGeometry = new THREE.BoxGeometry(boxW, boxH, boxD);
-            // Material will use vertexColors so instanceColor can tint instances
-            // Base material set to near-black so instance colors only subtly tint the cubes
-            const instMaterial = new THREE.MeshStandardMaterial({
-                color: 0x08080a, // very dark base
-                roughness: Math.max(0.4, roughnessVar),
-                metalness: Math.min(0.08, metalnessVar * 0.5),
-                envMapIntensity: 0.6,
-                vertexColors: true,
-                // small emissive factor left at material level; per-instance glow will be subtle
-                emissive: 0x000000,
-                emissiveIntensity: 0.0
-            });
-            const instancedMesh = new THREE.InstancedMesh(boxGeometry, instMaterial, shapesPerRing);
-            instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            // create instance color buffer
-            const instanceColorArray = new Float32Array(shapesPerRing * 3);
-            instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(instanceColorArray, 3);
-            ringGroup.add(instancedMesh);
-
             // Create varying geometries around the ring like a totem, with connectors
             for (let j = 0; j < shapesPerRing; j++) {
                 const angle = (j / shapesPerRing) * Math.PI * 2;
@@ -270,31 +232,101 @@ class RabbitHoleTunnel {
                 const y = Math.sin(angle) * radius;
                 const nextX = Math.cos(nextAngle) * radius;
                 const nextY = Math.sin(nextAngle) * radius;
-                // Set instance transform for this cube
-                const dummy = new THREE.Object3D();
-                dummy.position.set(x, y, 0);
-                dummy.rotation.z = angle;
-                dummy.updateMatrix();
-                instancedMesh.setMatrixAt(j, dummy.matrix);
-
-                // Per-instance color: pick from palette offset by j so cubes vary around ring
-                const color = new THREE.Color(this.colors[(colorIndex + j) % this.colors.length]);
-                // Use setColorAt which correctly populates the instance color attribute
-                if (typeof instancedMesh.setColorAt === 'function') {
-                    instancedMesh.setColorAt(j, color);
-                } else {
-                    // fallback if setColorAt is not available: write directly into buffer
-                    instancedMesh.instanceColor.setXYZ(j, color.r, color.g, color.b);
+                
+                // Choose random geometry type for totem variety (seeded by position)
+                const shapeType = Math.floor((Math.sin(i * 13.7 + j * 7.3) + 1) * 2.5);
+                let geometry;
+                let mesh;
+                
+                switch(shapeType % 5) {
+                    case 0: // Box
+                        geometry = new THREE.BoxGeometry(0.5, 0.6, 0.4);
+                        break;
+                    case 1: // Cylinder
+                        geometry = new THREE.CylinderGeometry(0.25, 0.25, 0.6, 6);
+                        break;
+                    case 2: // Sphere
+                        geometry = new THREE.SphereGeometry(0.35, 6, 6);
+                        break;
+                    case 3: // Cone
+                        geometry = new THREE.ConeGeometry(0.3, 0.6, 6);
+                        break;
+                    case 4: // Octahedron
+                        geometry = new THREE.OctahedronGeometry(0.35, 0);
+                        break;
                 }
-
+                
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, 0);
+                
+                // Rotate to face outward from ring center
+                mesh.rotation.z = angle;
+                
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
+                
+                ringGroup.add(mesh);
+                individualShapes.push(mesh); // Store for individual rotation
+                
+                // Add super glowing LED screen panel on the outer face of each shape
+                const ledMaterial = new THREE.MeshBasicMaterial({
+                    color: this.colors[colorIndex],
+                    emissive: this.colors[colorIndex],
+                    emissiveIntensity: 10.0, // Increased for maximum glow
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 1.0
+                });
+                
+                // Create flat rectangular LED screen - larger for more glow
+                const screenWidth = 0.35;
+                const screenHeight = 0.45;
+                const ledGeometry = new THREE.PlaneGeometry(screenWidth, screenHeight);
+                const ledPanel = new THREE.Mesh(ledGeometry, ledMaterial);
+                
+                // Position screen on the outer face of the shape
+                const offsetDistance = 0.25; // Push screen further outward
+                ledPanel.position.set(
+                    x + Math.cos(angle) * offsetDistance,
+                    y + Math.sin(angle) * offsetDistance,
+                    0
+                );
+                
+                // Rotate to face outward from ring center
+                ledPanel.rotation.z = angle;
+                
+                ringGroup.add(ledPanel);
+                
+                // Add even brighter glow layer behind LED panel
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: this.colors[colorIndex],
+                    emissive: this.colors[colorIndex],
+                    emissiveIntensity: 15.0,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                const glowGeometry = new THREE.PlaneGeometry(screenWidth * 1.3, screenHeight * 1.3);
+                const glowPanel = new THREE.Mesh(glowGeometry, glowMaterial);
+                
+                glowPanel.position.set(
+                    x + Math.cos(angle) * (offsetDistance - 0.02),
+                    y + Math.sin(angle) * (offsetDistance - 0.02),
+                    0
+                );
+                glowPanel.rotation.z = angle;
+                
+                ringGroup.add(glowPanel);
+                
                 // Add connector between this shape and the next
                 const distance = Math.sqrt((nextX - x) ** 2 + (nextY - y) ** 2);
                 const connectorGeometry = new THREE.CylinderGeometry(0.15, 0.15, distance, 6);
                 const connector = new THREE.Mesh(connectorGeometry, material);
-
+                
                 // Position connector at midpoint
                 connector.position.set((x + nextX) / 2, (y + nextY) / 2, 0);
-
+                
                 // Rotate connector to connect the two points
                 const connectorAngle = Math.atan2(nextY - y, nextX - x);
                 connector.rotation.z = connectorAngle + Math.PI / 2;
@@ -315,7 +347,7 @@ class RabbitHoleTunnel {
                 mesh: ringGroup,
                 originalZ: z,
                 colorIndex: colorIndex,
-                instancedMesh: instancedMesh
+                shapes: individualShapes
             });
         }
     }
@@ -362,8 +394,6 @@ class RabbitHoleTunnel {
         
         // Animate lights position only - keep intensity constant
         const time = Date.now() * 0.001;
-
-        // LED canvas animation removed — using solid emissive colors on cubes instead
         this.rimLight1.position.x = Math.sin(time * 0.5) * 4;
         this.rimLight1.position.y = Math.cos(time * 0.3) * 3;
         
@@ -381,9 +411,14 @@ class RabbitHoleTunnel {
             segment.mesh.position.x = curveX;
             segment.mesh.position.y = curveY;
             
-            // Apply a small per-ring rotation to the whole group (keeps connectors aligned)
-            const ringWiggle = 0.000 + (index % 3) * 0.0006;
-            segment.mesh.rotation.z += 0.001 + ringWiggle;
+            // Rotate individual shapes within each ring
+            if (segment.shapes) {
+                segment.shapes.forEach((shape, shapeIndex) => {
+                    // Each shape rotates on its Y axis (perpendicular to its outward facing direction)
+                    const shapeRotationSpeed = 0.01 + (shapeIndex % 5) * 0.002;
+                    shape.rotation.y += shapeRotationSpeed;
+                });
+            }
             
             // Reset rings that pass the camera - shift back by full tunnel length to preserve spacing
             if (segment.mesh.position.z > 10) {
