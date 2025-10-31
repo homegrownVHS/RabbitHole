@@ -4,9 +4,9 @@ class RabbitHoleTunnel {
         
         // Setup Three.js scene
     this.scene = new THREE.Scene();
-    // Make the terminal black fog much smaller so the dark circle at the far end is reduced
-    // Previous range was (20, 60) which produced a large dark area; shrink to (42, 58)
-    this.scene.fog = new THREE.Fog(0x000000, 42, 58);
+    // Use a smooth exponential fog to avoid hard linear bands at the tunnel end.
+    // Low density gives a gentle, natural falloff instead of a sharp ring.
+    this.scene.fog = new THREE.FogExp2(0x07131a, 0.009);
         
         // Camera setup - positioned inside the tunnel looking down the Z axis
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
