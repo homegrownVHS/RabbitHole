@@ -243,12 +243,16 @@ class RabbitHoleTunnel {
             const boxD = 0.4;
             const boxGeometry = new THREE.BoxGeometry(boxW, boxH, boxD);
             // Material will use vertexColors so instanceColor can tint instances
+            // Base material set to near-black so instance colors only subtly tint the cubes
             const instMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffffff,
-                roughness: roughnessVar,
-                metalness: metalnessVar,
-                envMapIntensity: 0.9,
-                vertexColors: true
+                color: 0x08080a, // very dark base
+                roughness: Math.max(0.4, roughnessVar),
+                metalness: Math.min(0.08, metalnessVar * 0.5),
+                envMapIntensity: 0.6,
+                vertexColors: true,
+                // small emissive factor left at material level; per-instance glow will be subtle
+                emissive: 0x000000,
+                emissiveIntensity: 0.0
             });
             const instancedMesh = new THREE.InstancedMesh(boxGeometry, instMaterial, shapesPerRing);
             instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
