@@ -372,12 +372,21 @@ class RabbitHoleTunnel {
             const curveY = Math.cos(z * 0.06) * 0.9;
             segment.mesh.position.x = curveX;
             segment.mesh.position.y = curveY;
-            
+
                 // Apply a moderate per-ring rotation to the whole group (keeps connectors aligned)
                 // Reduced base rotation and variation so the spin feels calmer
                 const ringWiggle = 0.000 + (index % 3) * 0.0006;
                 // base rotation lowered to 0.004 for a gentler spin
                 segment.mesh.rotation.z += 0.004 + ringWiggle;
+
+                // Taper rings with depth so the tunnel converges to a point instead of tubing out
+                // distance from camera along Z (camera is at positive Z)
+                const distanceFromCamera = Math.max(0, this.camera.position.z - segment.mesh.position.z);
+                const maxDistance = this.segmentLength * this.numSegments; // furthest ring distance
+                const tDepth = Math.min(distanceFromCamera / maxDistance, 1);
+                // scale ranges from 1.0 (near) down to 0.6 (far)
+                const taperScale = 1.0 - tDepth * 0.4;
+                segment.mesh.scale.set(taperScale, taperScale, taperScale);
             
             // Reset rings that pass the camera - shift back by full tunnel length to preserve spacing
             if (segment.mesh.position.z > 10) {
