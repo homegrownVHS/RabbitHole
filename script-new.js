@@ -330,9 +330,9 @@ class RabbitHoleTunnel {
                 ringGroup.add(connector);
             }
             
-            // Curve the tunnel - smooth serpentine motion
-            const curveX = Math.sin(z * 0.08) * 2.0;
-            const curveY = Math.cos(z * 0.06) * 1.5;
+            // Curve the tunnel - moderate serpentine motion
+            const curveX = Math.sin(z * 0.08) * 1.2;
+            const curveY = Math.cos(z * 0.06) * 0.9;
             ringGroup.position.set(curveX, curveY, z);
             
             this.scene.add(ringGroup);
@@ -395,10 +395,10 @@ class RabbitHoleTunnel {
         this.tunnelSegments.forEach((segment, index) => {
             segment.mesh.position.z += organicSpeed;
             
-            // Update curve position - smooth serpentine motion
+            // Update curve position - moderate serpentine motion
             const z = segment.mesh.position.z;
-            const curveX = Math.sin(z * 0.08) * 2.0;
-            const curveY = Math.cos(z * 0.06) * 1.5;
+            const curveX = Math.sin(z * 0.08) * 1.2;
+            const curveY = Math.cos(z * 0.06) * 0.9;
             segment.mesh.position.x = curveX;
             segment.mesh.position.y = curveY;
             
