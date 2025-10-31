@@ -36,7 +36,12 @@ class RabbitHoleTunnel {
             0x1ABC9C, // Turquoise
             0x00FFFF, // Cyan
             0x3498DB, // Blue
-            0x9B59B6, // Purple
+            // Extra purples to bias the palette toward violet hues
+            0x9B59B6, // Purple (original)
+            0x8E44AD, // Deep purple
+            0x7D3C98, // Muted violet
+            0x6A0DAD, // Rich violet
+            0xB39DDB, // Pale lavender
             0xFF00FF, // Magenta
             0xC44569, // Deep rose
             0xFF1493  // Deep pink
@@ -66,7 +71,8 @@ class RabbitHoleTunnel {
         this.rimLight1.position.set(3, 2, -10);
         this.scene.add(this.rimLight1);
         
-        this.rimLight2 = new THREE.PointLight(0x3498db, 0.6, 40);
+    // Slightly tint the second rim light toward purple to enhance violet feeling
+    this.rimLight2 = new THREE.PointLight(0x8E44AD, 0.6, 40);
         this.rimLight2.position.set(-3, -2, -20);
         this.scene.add(this.rimLight2);
         
