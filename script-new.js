@@ -376,7 +376,8 @@ class RabbitHoleTunnel {
             const maxDistance = this.segmentLength * this.numSegments;
             const depthPercent = Math.min(Math.max((-segment.mesh.position.z) / maxDistance, 0), 1);
             // ease-in curve so the bend accumulates toward the far end
-            const bend = Math.pow(depthPercent, 2.2) * 2.2; // controls how far to the right the end curves
+            // Slightly increase the multiplier for a tiny bit more rightward curvature
+            const bend = Math.pow(depthPercent, 3.0) * 6.0; // slightly stronger bend
             segment.mesh.position.x = curveX + bend;
             segment.mesh.position.y = curveY;
 
