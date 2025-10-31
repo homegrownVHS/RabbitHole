@@ -45,7 +45,7 @@ class RabbitHole {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Increment offset smoothly
-        this.offset += 0.6; // Slower speed for smoother checkerboard
+        this.offset += 0.6;
         
         // Calculate all ring positions
         const rings = [];
@@ -109,9 +109,10 @@ class RabbitHole {
             if (innerRadius > 0) {
                 // Draw checkerboard segments with smooth fade transitions
                 for (let seg = 0; seg < numSegments; seg++) {
-                    // Alternate colors in checkerboard pattern
-                    // Pattern alternates both radially (segment) and depth-wise (ring)
-                    const isAlternate = (seg + ringIdx) % 2 === 0;
+                    // Use ring's actual depth index for the pattern
+                    // Calculate which "logical ring" this is based on its z position
+                    const depthRingIndex = Math.floor((ring.z - 60) / ringSpacing);
+                    const isAlternate = (seg + depthRingIndex) % 2 === 0;
                     
                     const startAngle = (seg / numSegments) * Math.PI * 2;
                     const endAngle = ((seg + 1) / numSegments) * Math.PI * 2;
