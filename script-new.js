@@ -239,9 +239,10 @@ class RabbitHoleTunnel {
             });
             
             // Prepare a single InstancedMesh for all cubes in this ring (much fewer draw calls)
-            const boxW = 0.5;
-            const boxH = 0.6;
-            const boxD = 0.4;
+            // Make cubes slightly smaller to let more color show through
+            const boxW = 0.42; // previously 0.5
+            const boxH = 0.504; // previously 0.6 (scaled by 0.84)
+            const boxD = 0.336; // previously 0.4 (scaled by 0.84)
             const boxGeometry = new THREE.BoxGeometry(boxW, boxH, boxD);
             // Material will use vertexColors so instanceColor can tint instances
             // Base material set to near-black so instance colors only subtly tint the cubes
