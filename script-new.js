@@ -197,6 +197,7 @@ class RabbitHoleTunnel {
             
             // Create a group to hold all shapes in this ring
             const ringGroup = new THREE.Group();
+            const individualShapes = []; // Track individual shapes for rotation
             
             // Modern PBR material setup
             const textureIndex = i % this.leatherTextures.length;
@@ -258,23 +259,26 @@ class RabbitHoleTunnel {
                 mesh.receiveShadow = false;
                 
                 ringGroup.add(mesh);
+                individualShapes.push(mesh); // Store for individual rotation
                 
-                // Add glowing LED screen panel on the outer face of each shape
+                // Add super glowing LED screen panel on the outer face of each shape
                 const ledMaterial = new THREE.MeshBasicMaterial({
                     color: this.colors[colorIndex],
                     emissive: this.colors[colorIndex],
-                    emissiveIntensity: 3.0,
-                    side: THREE.DoubleSide
+                    emissiveIntensity: 10.0, // Increased for maximum glow
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 1.0
                 });
                 
-                // Create flat rectangular LED screen
-                const screenWidth = 0.3;
-                const screenHeight = 0.4;
+                // Create flat rectangular LED screen - larger for more glow
+                const screenWidth = 0.35;
+                const screenHeight = 0.45;
                 const ledGeometry = new THREE.PlaneGeometry(screenWidth, screenHeight);
                 const ledPanel = new THREE.Mesh(ledGeometry, ledMaterial);
                 
                 // Position screen on the outer face of the shape
-                const offsetDistance = 0.22; // Push screen slightly outward
+                const offsetDistance = 0.25; // Push screen further outward
                 ledPanel.position.set(
                     x + Math.cos(angle) * offsetDistance,
                     y + Math.sin(angle) * offsetDistance,
@@ -285,6 +289,28 @@ class RabbitHoleTunnel {
                 ledPanel.rotation.z = angle;
                 
                 ringGroup.add(ledPanel);
+                
+                // Add even brighter glow layer behind LED panel
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: this.colors[colorIndex],
+                    emissive: this.colors[colorIndex],
+                    emissiveIntensity: 15.0,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                const glowGeometry = new THREE.PlaneGeometry(screenWidth * 1.3, screenHeight * 1.3);
+                const glowPanel = new THREE.Mesh(glowGeometry, glowMaterial);
+                
+                glowPanel.position.set(
+                    x + Math.cos(angle) * (offsetDistance - 0.02),
+                    y + Math.sin(angle) * (offsetDistance - 0.02),
+                    0
+                );
+                glowPanel.rotation.z = angle;
+                
+                ringGroup.add(glowPanel);
                 
                 // Add connector between this shape and the next
                 const distance = Math.sqrt((nextX - x) ** 2 + (nextY - y) ** 2);
@@ -313,7 +339,8 @@ class RabbitHoleTunnel {
             this.tunnelSegments.push({
                 mesh: ringGroup,
                 originalZ: z,
-                colorIndex: colorIndex
+                colorIndex: colorIndex,
+                shapes: individualShapes
             });
         }
     }
@@ -375,8 +402,14 @@ class RabbitHoleTunnel {
             segment.mesh.position.x = curveX;
             segment.mesh.position.y = curveY;
             
-            // Add organic rotation to the ring group
-            segment.mesh.rotation.z += 0.002;
+            // Rotate individual shapes within each ring
+            if (segment.shapes) {
+                segment.shapes.forEach((shape, shapeIndex) => {
+                    // Each shape rotates on its Y axis (perpendicular to its outward facing direction)
+                    const shapeRotationSpeed = 0.01 + (shapeIndex % 5) * 0.002;
+                    shape.rotation.y += shapeRotationSpeed;
+                });
+            }
             
             // Reset rings that pass the camera
             if (segment.mesh.position.z > 10) {
