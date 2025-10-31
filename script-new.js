@@ -70,7 +70,8 @@ class RabbitHoleTunnel {
         
     // Animation properties
     // Lower base speed so tunnel movement feels less frantic on slower machines
-    this.speed = 0.03;
+    // Reduced from 0.03 to 0.02 to slow forward movement slightly
+    this.speed = 0.02;
         this.tunnelOffset = 0;
         this.time = 0;
         
@@ -337,28 +338,16 @@ class RabbitHoleTunnel {
                                (Math.sin(this.time * 1.2) * 0.5 + 0.5) * 0.01;
     // Clamp overall forward speed so the tunnel never goes too fast
     let organicSpeed = this.speed + speedVariation;
-    organicSpeed = Math.max(0.01, Math.min(organicSpeed, 0.045));
+    // Lower max clamp so bursts are less extreme and speed feels calmer
+    organicSpeed = Math.max(0.01, Math.min(organicSpeed, 0.032));
     this.tunnelOffset += organicSpeed;
         
-        // Complex camera sway - multiple frequency layers for organic tumbling
-        const cameraSwayX = Math.sin(this.time * 0.4) * 0.5 + 
-                           Math.sin(this.time * 0.9) * 0.25 +
-                           Math.sin(this.time * 1.3) * 0.15;
-        const cameraSwayY = Math.cos(this.time * 0.5) * 0.45 + 
-                           Math.cos(this.time * 0.8) * 0.2 +
-                           Math.cos(this.time * 1.5) * 0.1;
-        const cameraRoll = Math.sin(this.time * 0.3) * 0.12 + 
-                          Math.sin(this.time * 0.85) * 0.06;
-        
-        // Add pitch and yaw rotation for more dynamic falling sensation
-        const cameraPitch = Math.sin(this.time * 0.35) * 0.08;
-        const cameraYaw = Math.cos(this.time * 0.42) * 0.1;
-        
-        this.camera.position.x = cameraSwayX;
-        this.camera.position.y = cameraSwayY;
-        this.camera.rotation.z = cameraRoll;
-        this.camera.rotation.x = cameraPitch;
-        this.camera.rotation.y = cameraYaw;
+    // Keep the camera centered and stable — no sway, no roll/pitch/yaw
+    this.camera.position.x = 0;
+    this.camera.position.y = 0;
+    this.camera.rotation.x = 0;
+    this.camera.rotation.y = 0;
+    this.camera.rotation.z = 0;
         
         // Animate lights position only - keep intensity constant
         const time = Date.now() * 0.001;
@@ -381,9 +370,11 @@ class RabbitHoleTunnel {
             segment.mesh.position.x = curveX;
             segment.mesh.position.y = curveY;
             
-            // Apply a small per-ring rotation to the whole group (keeps connectors aligned)
-            const ringWiggle = 0.000 + (index % 3) * 0.0006;
-            segment.mesh.rotation.z += 0.001 + ringWiggle;
+                // Apply a moderate per-ring rotation to the whole group (keeps connectors aligned)
+                // Reduced base rotation and variation so the spin feels calmer
+                const ringWiggle = 0.000 + (index % 3) * 0.0006;
+                // base rotation lowered to 0.004 for a gentler spin
+                segment.mesh.rotation.z += 0.004 + ringWiggle;
             
             // Reset rings that pass the camera - shift back by full tunnel length to preserve spacing
             if (segment.mesh.position.z > 10) {
