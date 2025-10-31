@@ -32,6 +32,11 @@
 - Use simple geometric shapes with strong contrast
 - Keep animations smooth and focused on the tunnel effect
 
+## File Editing Rules
+- When editing files, DO NOT switch the active editor tab to the file being edited
+- Allow the user to stay on their current tab (e.g., browser view)
+- User will manually refresh or switch tabs when they want to see changes
+
 <!--
 ## Execution Guidelines
 PROGRESS TRACKING:
