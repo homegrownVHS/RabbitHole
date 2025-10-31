@@ -73,7 +73,7 @@ class RabbitHoleTunnel {
         this.scene.add(this.rimLight2);
         
         // Animation properties
-        this.speed = 0.08;
+        this.speed = 0.05;
         this.tunnelOffset = 0;
         this.time = 0;
         
@@ -138,7 +138,7 @@ class RabbitHoleTunnel {
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(2, 1);
+        texture.repeat.set(3, 1); // More repeats for seamless appearance
         return texture;
     }
     
@@ -172,7 +172,7 @@ class RabbitHoleTunnel {
         const normalMap = new THREE.CanvasTexture(canvas);
         normalMap.wrapS = THREE.RepeatWrapping;
         normalMap.wrapT = THREE.RepeatWrapping;
-        normalMap.repeat.set(2, 1);
+        normalMap.repeat.set(3, 1); // Match texture repeat for consistency
         return normalMap;
     }
     
