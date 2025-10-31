@@ -189,26 +189,16 @@ class RabbitHoleTunnel {
         const segmentLength = 0.5;
         const numSegments = 200;
         const radius = 3;
-        const radialSegments = 32;
+        const shapesPerRing = 24; // Number of totem shapes around the ring
         
         for (let i = 0; i < numSegments; i++) {
             const z = -i * segmentLength;
             const colorIndex = i % this.colors.length;
             
-            // Create ring geometry (torus shape) with higher segment count for deformation
-            const geometry = new THREE.TorusGeometry(radius, 0.15, 16, 64);
+            // Create a group to hold all shapes in this ring
+            const ringGroup = new THREE.Group();
             
-            // Store original positions for animation
-            const positions = geometry.attributes.position;
-            const originalPositions = new Float32Array(positions.count * 3);
-            for (let j = 0; j < positions.count; j++) {
-                originalPositions[j * 3] = positions.getX(j);
-                originalPositions[j * 3 + 1] = positions.getY(j);
-                originalPositions[j * 3 + 2] = positions.getZ(j);
-            }
-            geometry.userData.originalPositions = originalPositions;
-            
-            // Modern PBR material with varied textures per ring
+            // Modern PBR material setup
             const textureIndex = i % this.leatherTextures.length;
             const roughnessVar = 0.2 + (Math.sin(i * 0.5) * 0.5 + 0.5) * 0.3;
             const metalnessVar = 0.4 + (Math.cos(i * 0.3) * 0.5 + 0.5) * 0.3;
@@ -225,19 +215,103 @@ class RabbitHoleTunnel {
                 emissiveIntensity: 0.1 + Math.sin(i * 0.2) * 0.05
             });
             
-            const ring = new THREE.Mesh(geometry, material);
-            ring.castShadow = false;
-            ring.receiveShadow = false;
+            // Create varying geometries around the ring like a totem, with connectors
+            for (let j = 0; j < shapesPerRing; j++) {
+                const angle = (j / shapesPerRing) * Math.PI * 2;
+                const nextAngle = ((j + 1) / shapesPerRing) * Math.PI * 2;
+                
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                const nextX = Math.cos(nextAngle) * radius;
+                const nextY = Math.sin(nextAngle) * radius;
+                
+                // Choose random geometry type for totem variety (seeded by position)
+                const shapeType = Math.floor((Math.sin(i * 13.7 + j * 7.3) + 1) * 2.5);
+                let geometry;
+                let mesh;
+                
+                switch(shapeType % 5) {
+                    case 0: // Box
+                        geometry = new THREE.BoxGeometry(0.5, 0.6, 0.4);
+                        break;
+                    case 1: // Cylinder
+                        geometry = new THREE.CylinderGeometry(0.25, 0.25, 0.6, 8);
+                        break;
+                    case 2: // Sphere
+                        geometry = new THREE.SphereGeometry(0.35, 8, 8);
+                        break;
+                    case 3: // Cone
+                        geometry = new THREE.ConeGeometry(0.3, 0.6, 8);
+                        break;
+                    case 4: // Octahedron
+                        geometry = new THREE.OctahedronGeometry(0.35, 0);
+                        break;
+                }
+                
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, 0);
+                
+                // Rotate to face outward from ring center
+                mesh.rotation.z = angle;
+                
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
+                
+                ringGroup.add(mesh);
+                
+                // Add glowing LED screen panel on the outer face of each shape
+                const ledMaterial = new THREE.MeshBasicMaterial({
+                    color: this.colors[colorIndex],
+                    emissive: this.colors[colorIndex],
+                    emissiveIntensity: 3.0,
+                    side: THREE.DoubleSide
+                });
+                
+                // Create flat rectangular LED screen
+                const screenWidth = 0.3;
+                const screenHeight = 0.4;
+                const ledGeometry = new THREE.PlaneGeometry(screenWidth, screenHeight);
+                const ledPanel = new THREE.Mesh(ledGeometry, ledMaterial);
+                
+                // Position screen on the outer face of the shape
+                const offsetDistance = 0.22; // Push screen slightly outward
+                ledPanel.position.set(
+                    x + Math.cos(angle) * offsetDistance,
+                    y + Math.sin(angle) * offsetDistance,
+                    0
+                );
+                
+                // Rotate to face outward from ring center
+                ledPanel.rotation.z = angle;
+                
+                ringGroup.add(ledPanel);
+                
+                // Add connector between this shape and the next
+                const distance = Math.sqrt((nextX - x) ** 2 + (nextY - y) ** 2);
+                const connectorGeometry = new THREE.CylinderGeometry(0.15, 0.15, distance, 8);
+                const connector = new THREE.Mesh(connectorGeometry, material);
+                
+                // Position connector at midpoint
+                connector.position.set((x + nextX) / 2, (y + nextY) / 2, 0);
+                
+                // Rotate connector to connect the two points
+                const connectorAngle = Math.atan2(nextY - y, nextX - x);
+                connector.rotation.z = connectorAngle + Math.PI / 2;
+                
+                connector.castShadow = false;
+                connector.receiveShadow = false;
+                
+                ringGroup.add(connector);
+            }
             
-            // Curve the tunnel - quick sharp turns left and right
-            const curveX = Math.sin(Math.abs(z) * 0.08) * Math.abs(z) * 0.12;
-            ring.position.set(curveX, 0, z);
+            // Curve the tunnel - smooth serpentine motion
+            const curveX = Math.sin(z * 0.08) * 2.0;
+            const curveY = Math.cos(z * 0.06) * 1.5;
+            ringGroup.position.set(curveX, curveY, z);
             
-            // Rings face the camera (perpendicular to Z axis)
-            
-            this.scene.add(ring);
+            this.scene.add(ringGroup);
             this.tunnelSegments.push({
-                mesh: ring,
+                mesh: ringGroup,
                 originalZ: z,
                 colorIndex: colorIndex
             });
@@ -255,10 +329,10 @@ class RabbitHoleTunnel {
         
         this.time += 0.016; // Approximate frame time
         
-        // Organic variable speed - breathe in and out with more variation
-        const speedVariation = Math.sin(this.time * 0.3) * 0.05 + 
-                               Math.sin(this.time * 0.7) * 0.03 +
-                               Math.sin(this.time * 1.2) * 0.02;
+        // Organic variable speed - always positive, just varies intensity
+        const speedVariation = (Math.sin(this.time * 0.3) * 0.5 + 0.5) * 0.02 + 
+                               (Math.sin(this.time * 0.7) * 0.5 + 0.5) * 0.015 +
+                               (Math.sin(this.time * 1.2) * 0.5 + 0.5) * 0.01;
         const organicSpeed = this.speed + speedVariation;
         this.tunnelOffset += organicSpeed;
         
@@ -294,44 +368,15 @@ class RabbitHoleTunnel {
         this.tunnelSegments.forEach((segment, index) => {
             segment.mesh.position.z += organicSpeed;
             
-            // Update curve position - quick sharp turns
+            // Update curve position - smooth serpentine motion
             const z = segment.mesh.position.z;
-            const curveX = Math.sin(Math.abs(z) * 0.08) * Math.abs(z) * 0.12;
+            const curveX = Math.sin(z * 0.08) * 2.0;
+            const curveY = Math.cos(z * 0.06) * 1.5;
             segment.mesh.position.x = curveX;
-            segment.mesh.position.y = 0;
+            segment.mesh.position.y = curveY;
             
-            // Apply sine wave wiggle to vertices
-            const geometry = segment.mesh.geometry;
-            const positions = geometry.attributes.position;
-            const originalPositions = geometry.userData.originalPositions;
-            
-            if (originalPositions) {
-                for (let i = 0; i < positions.count; i++) {
-                    const angle = (i / positions.count) * Math.PI * 2;
-                    const wave1 = Math.sin(angle * this.wiggleParams.freq1 + this.time * this.wiggleParams.speed1);
-                    const wave2 = Math.sin(angle * this.wiggleParams.freq2 - this.time * this.wiggleParams.speed2);
-                    
-                    const x = originalPositions[i * 3];
-                    const y = originalPositions[i * 3 + 1];
-                    const z = originalPositions[i * 3 + 2];
-                    
-                    // Apply radial displacement (scales out from center)
-                    const radialOffset = wave1 * this.wiggleParams.amp1Radial + wave2 * this.wiggleParams.amp2;
-                    
-                    // Apply tangential displacement (rotates around)
-                    const tangentOffset = wave1 * this.wiggleParams.amp1Tangential;
-                    
-                    const length = Math.sqrt(x * x + y * y);
-                    if (length > 0) {
-                        const radialScale = 1 + radialOffset;
-                        const newX = x * radialScale - y * tangentOffset;
-                        const newY = y * radialScale + x * tangentOffset;
-                        positions.setXYZ(i, newX, newY, z);
-                    }
-                }
-                positions.needsUpdate = true;
-                geometry.computeVertexNormals();
-            }
+            // Add organic rotation to the ring group
+            segment.mesh.rotation.z += 0.002;
             
             // Reset rings that pass the camera
             if (segment.mesh.position.z > 10) {
