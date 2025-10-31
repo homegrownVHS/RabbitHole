@@ -370,7 +370,14 @@ class RabbitHoleTunnel {
             const z = segment.mesh.position.z;
             const curveX = Math.sin(z * 0.08) * 1.2;
             const curveY = Math.cos(z * 0.06) * 0.9;
-            segment.mesh.position.x = curveX;
+            // Slight additional bending to the right for distant rings so the tunnel end
+            // curves out of view and the dark circle is masked by nearer textures.
+            // depthPercent goes from 0 (near) to 1 (furthest)
+            const maxDistance = this.segmentLength * this.numSegments;
+            const depthPercent = Math.min(Math.max((-segment.mesh.position.z) / maxDistance, 0), 1);
+            // ease-in curve so the bend accumulates toward the far end
+            const bend = Math.pow(depthPercent, 2.2) * 2.2; // controls how far to the right the end curves
+            segment.mesh.position.x = curveX + bend;
             segment.mesh.position.y = curveY;
 
                 // Apply a moderate per-ring rotation to the whole group (keeps connectors aligned)
@@ -382,7 +389,6 @@ class RabbitHoleTunnel {
                 // Taper rings with depth so the tunnel converges to a point instead of tubing out
                 // distance from camera along Z (camera is at positive Z)
                 const distanceFromCamera = Math.max(0, this.camera.position.z - segment.mesh.position.z);
-                const maxDistance = this.segmentLength * this.numSegments; // furthest ring distance
                 const tDepth = Math.min(distanceFromCamera / maxDistance, 1);
                 // scale ranges from 1.0 (near) down to 0.6 (far)
                 const taperScale = 1.0 - tDepth * 0.4;
