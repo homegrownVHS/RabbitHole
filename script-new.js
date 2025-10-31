@@ -17,7 +17,8 @@ class RabbitHoleTunnel {
             alpha: false
         });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Limit pixel ratio to reduce GPU load on slower machines
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 0.9;
         this.renderer.shadowMap.enabled = true;
@@ -92,8 +93,9 @@ class RabbitHoleTunnel {
     
     createLeatherTexture(seed = 0) {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        // smaller texture size to save memory and sampling cost on slower GPUs
+        canvas.width = 256;
+        canvas.height = 256;
         const ctx = canvas.getContext('2d');
         
         // Start with bright base
@@ -153,8 +155,9 @@ class RabbitHoleTunnel {
     
     createLeatherNormalMap(seed = 0) {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        // smaller normal map to reduce generation and sampling cost
+        canvas.width = 256;
+        canvas.height = 256;
         const ctx = canvas.getContext('2d');
         
         // Base normal (neutral blue)
@@ -162,7 +165,7 @@ class RabbitHoleTunnel {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Create pronounced bumps with seed variation
-        const bumpCount = 80 + seed * 20;
+    const bumpCount = 40 + seed * 10; // fewer bumps for faster generation
         for (let i = 0; i < bumpCount; i++) {
             const x = Math.random() * canvas.width;
             const y = Math.random() * canvas.height;
@@ -187,9 +190,9 @@ class RabbitHoleTunnel {
     
     createTunnel() {
         const segmentLength = 0.5;
-        const numSegments = 200;
+    const numSegments = 120; // reduced for performance
         const radius = 3;
-        const shapesPerRing = 24; // Number of totem shapes around the ring
+    const shapesPerRing = 12; // fewer shapes per ring to cut draw calls
         
         for (let i = 0; i < numSegments; i++) {
             const z = -i * segmentLength;
@@ -236,13 +239,13 @@ class RabbitHoleTunnel {
                         geometry = new THREE.BoxGeometry(0.5, 0.6, 0.4);
                         break;
                     case 1: // Cylinder
-                        geometry = new THREE.CylinderGeometry(0.25, 0.25, 0.6, 8);
+                        geometry = new THREE.CylinderGeometry(0.25, 0.25, 0.6, 6);
                         break;
                     case 2: // Sphere
-                        geometry = new THREE.SphereGeometry(0.35, 8, 8);
+                        geometry = new THREE.SphereGeometry(0.35, 6, 6);
                         break;
                     case 3: // Cone
-                        geometry = new THREE.ConeGeometry(0.3, 0.6, 8);
+                        geometry = new THREE.ConeGeometry(0.3, 0.6, 6);
                         break;
                     case 4: // Octahedron
                         geometry = new THREE.OctahedronGeometry(0.35, 0);
@@ -314,7 +317,7 @@ class RabbitHoleTunnel {
                 
                 // Add connector between this shape and the next
                 const distance = Math.sqrt((nextX - x) ** 2 + (nextY - y) ** 2);
-                const connectorGeometry = new THREE.CylinderGeometry(0.15, 0.15, distance, 8);
+                const connectorGeometry = new THREE.CylinderGeometry(0.15, 0.15, distance, 6);
                 const connector = new THREE.Mesh(connectorGeometry, material);
                 
                 // Position connector at midpoint
