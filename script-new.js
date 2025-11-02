@@ -25,6 +25,11 @@ class RabbitHoleTunnel {
         this.renderer.toneMappingExposure = 0.9;
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Removed loud demonstration visuals (radial page background + brutal Points swarm)
+        // in favor of richer in-scene additive glow layers per ring.
+
+        // NOTE: removed the 'b' key toggle that previously controlled the loud swarm.
         
         // Color palette - all vibrant colors
         this.colors = [
@@ -75,6 +80,7 @@ class RabbitHoleTunnel {
     this.rimLight2 = new THREE.PointLight(0x8E44AD, 0.6, 40);
         this.rimLight2.position.set(-3, -2, -20);
         this.scene.add(this.rimLight2);
+        // Keep page background styling to CSS only; no runtime DOM background overrides here.
         
     // Animation properties
     // Lower base speed so tunnel movement feels less frantic on slower machines
@@ -248,21 +254,19 @@ class RabbitHoleTunnel {
             
             // Prepare a single InstancedMesh for all cubes in this ring (much fewer draw calls)
             // Make cubes slightly smaller to let more color show through
-            const boxW = 0.42; // previously 0.5
-            const boxH = 0.504; // previously 0.6 (scaled by 0.84)
+            const boxW = 0.4; // previously 0.5
+            const boxH = 0.304; // previously 0.6 (scaled by 0.84)
             const boxD = 0.336; // previously 0.4 (scaled by 0.84)
             const boxGeometry = new THREE.BoxGeometry(boxW, boxH, boxD);
-            // Material will use vertexColors so instanceColor can tint instances
-            // Base material set to near-black so instance colors only subtly tint the cubes
+            // Material will use vertexColors so instanceColor fully controls the color
             const instMaterial = new THREE.MeshStandardMaterial({
-                color: 0x08080a, // very dark base
+                color: 0xffffff, // white base so instanceColor sets the full color
                 roughness: Math.max(0.4, roughnessVar),
-                metalness: Math.min(0.08, metalnessVar * 0.5),
+                metalness: Math.min(0.58, metalnessVar * 0.5),
                 envMapIntensity: 0.6,
                 vertexColors: true,
-                // small emissive factor left at material level; per-instance glow will be subtle
                 emissive: 0x000000,
-                emissiveIntensity: 0.0
+                emissiveIntensity: 5.0
             });
             const instancedMesh = new THREE.InstancedMesh(boxGeometry, instMaterial, shapesPerRing);
             instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -271,7 +275,42 @@ class RabbitHoleTunnel {
             instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(instanceColorArray, 3);
             ringGroup.add(instancedMesh);
 
+            // Add two additive glow layers per ring (inner neon and outer halo)
+            const glowMat = new THREE.MeshBasicMaterial({
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                depthTest: false,
+                opacity: 0.66,
+                toneMapped: false
+            });
+            const glowMesh = new THREE.InstancedMesh(boxGeometry, glowMat, shapesPerRing);
+            glowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            glowMesh.renderOrder = 999; // render glow on top
+            const glowColorArray = new Float32Array(shapesPerRing * 3);
+            glowMesh.instanceColor = new THREE.InstancedBufferAttribute(glowColorArray, 3);
+            ringGroup.add(glowMesh);
+
+            const haloMat = new THREE.MeshBasicMaterial({
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                depthTest: false,
+                opacity: 0.96,
+                toneMapped: false
+            });
+            const haloMesh = new THREE.InstancedMesh(boxGeometry, haloMat, shapesPerRing);
+            haloMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            haloMesh.renderOrder = 1000; // render halo on top of glow
+            const haloColorArray = new Float32Array(shapesPerRing * 3);
+            haloMesh.instanceColor = new THREE.InstancedBufferAttribute(haloColorArray, 3);
+            ringGroup.add(haloMesh);
+
             // Create varying geometries around the ring like a totem, with connectors
+            // store per-instance base colors and intensity factors so we can animate them coherently
+            const baseColors = [];
+            const colorInts = new Float32Array(shapesPerRing);
+
             for (let j = 0; j < shapesPerRing; j++) {
                 const angle = (j / shapesPerRing) * Math.PI * 2;
                 const nextAngle = ((j + 1) / shapesPerRing) * Math.PI * 2;
@@ -287,14 +326,47 @@ class RabbitHoleTunnel {
                 dummy.updateMatrix();
                 instancedMesh.setMatrixAt(j, dummy.matrix);
 
-                // Per-instance color: pick from palette offset by j so cubes vary around ring
-                const color = new THREE.Color(this.colors[(colorIndex + j) % this.colors.length]);
-                // Use setColorAt which correctly populates the instance color attribute
-                if (typeof instancedMesh.setColorAt === 'function') {
-                    instancedMesh.setColorAt(j, color);
-                } else {
-                    // fallback if setColorAt is not available: write directly into buffer
+                // inner glow slightly scaled for neon peek
+                const glowDummy = new THREE.Object3D();
+                glowDummy.position.copy(dummy.position);
+                glowDummy.rotation.copy(dummy.rotation);
+                glowDummy.scale.set(2.35, 2.35, 2.35);
+                glowDummy.updateMatrix();
+                glowMesh.setMatrixAt(j, glowDummy.matrix);
+
+                // outer halo scaled more for soft bloom-ish look
+                const haloDummy = new THREE.Object3D();
+                haloDummy.position.copy(dummy.position);
+                haloDummy.rotation.copy(dummy.rotation);
+                haloDummy.scale.set(1.9, 1.9, 1.9);
+                haloDummy.updateMatrix();
+                haloMesh.setMatrixAt(j, haloDummy.matrix);
+
+                // Per-instance color: pick a (random) palette entry per-shape so neighbors contrast
+                const color = new THREE.Color(this.colors[Math.floor(Math.random() * this.colors.length)]);
+                // store base color and a per-instance intensity (varies how brightly it peaks)
+                baseColors[j] = color.clone();
+                colorInts[j] = 0.6 + Math.random() * 1.0; // 0.6 - 1.6 range
+                // Write per-instance color directly into the instanceColor buffers for reliability
+                try {
                     instancedMesh.instanceColor.setXYZ(j, color.r, color.g, color.b);
+                } catch (e) {
+                    // fallback to setColorAt if instanceColor is not available
+                    if (typeof instancedMesh.setColorAt === 'function') instancedMesh.setColorAt(j, color);
+                }
+
+                // Glow colors: bias toward white to make neon peek brighter
+                const glowColor = color.clone().lerp(new THREE.Color(0xffffff), 0.45);
+                const haloColor = color.clone().lerp(new THREE.Color(0xffffff), 0.7);
+                try {
+                    glowMesh.instanceColor.setXYZ(j, glowColor.r, glowColor.g, glowColor.b);
+                } catch (e) {
+                    if (typeof glowMesh.setColorAt === 'function') glowMesh.setColorAt(j, glowColor);
+                }
+                try {
+                    haloMesh.instanceColor.setXYZ(j, haloColor.r, haloColor.g, haloColor.b);
+                } catch (e) {
+                    if (typeof haloMesh.setColorAt === 'function') haloMesh.setColorAt(j, haloColor);
                 }
 
                 // Add connector between this shape and the next
@@ -320,12 +392,21 @@ class RabbitHoleTunnel {
             const curveY = Math.cos(z * 0.06) * 0.9;
             ringGroup.position.set(curveX, curveY, z);
             
+            // mark instance color buffers for upload
+            try { instancedMesh.instanceColor.needsUpdate = true; } catch (e) {}
+            try { glowMesh.instanceColor.needsUpdate = true; } catch (e) {}
+            try { haloMesh.instanceColor.needsUpdate = true; } catch (e) {}
+
             this.scene.add(ringGroup);
             this.tunnelSegments.push({
                 mesh: ringGroup,
                 originalZ: z,
                 colorIndex: colorIndex,
-                instancedMesh: instancedMesh
+                instancedMesh: instancedMesh,
+                glowMesh: glowMesh,
+                haloMesh: haloMesh,
+                baseColors: baseColors,
+                colorInts: colorInts
             });
         }
     }
@@ -368,6 +449,9 @@ class RabbitHoleTunnel {
         this.rimLight2.position.x = Math.cos(time * 0.4) * 4;
         this.rimLight2.position.y = Math.sin(time * 0.6) * 3;
         
+        // coherent color phase for all instances (keeps cycling in-phase and avoids strobe)
+        const colorPhase = (Math.sin(this.time * 0.9) * 0.5 + 0.5);
+
         // Update ring positions for infinite loop - rings move toward camera
         this.tunnelSegments.forEach((segment, index) => {
             segment.mesh.position.z += organicSpeed;
@@ -401,10 +485,54 @@ class RabbitHoleTunnel {
                 const taperScale = 1.0 - tDepth * 0.4;
                 segment.mesh.scale.set(taperScale, taperScale, taperScale);
             
+                // Neon enhancement: pulsing glow intensity (removed per-ring emissive to let instance colors show)
+                try {
+                    // Glow layers: increase opacity for nearer rings and add a slow pulse
+                    if (segment.glowMesh) {
+                        segment.glowMesh.material.opacity = 0.18 + (1 - tDepth) * 0.42 + 0.03 * Math.sin(this.time * 2.2 + index);
+                        segment.glowMesh.material.needsUpdate = true;
+                    }
+                    if (segment.haloMesh) {
+                        segment.haloMesh.material.opacity = 0.08 + (1 - tDepth) * 0.28 + 0.02 * Math.sin(this.time * 1.8 + index + 0.5);
+                        segment.haloMesh.material.needsUpdate = true;
+                    }
+                } catch (e) { /* tolerate materials not being ready during startup */ }
             // Reset rings that pass the camera - shift back by full tunnel length to preserve spacing
             if (segment.mesh.position.z > 10) {
                 segment.mesh.position.z -= (this.segmentLength * this.numSegments);
             }
+
+            // Update per-instance colors smoothly and in-phase (avoids jitter/strobe)
+            try {
+                const base = segment.baseColors;
+                const ints = segment.colorInts;
+                if (base && base.length && segment.instancedMesh && segment.instancedMesh.instanceColor) {
+                    const ic = segment.instancedMesh.instanceColor;
+                    const gm = segment.glowMesh && segment.glowMesh.instanceColor;
+                    const hm = segment.haloMesh && segment.haloMesh.instanceColor;
+                    for (let k = 0; k < base.length; k++) {
+                        const b = base[k];
+                        const intensity = ints[k] || 1.0;
+                        // global in-phase factor
+                        const t = colorPhase;
+                        // lerp toward white to simulate peaking neon; scaled by per-instance intensity (reduced to keep colors distinct)
+                        const instCol = b.clone().lerp(new THREE.Color(0xffffff), Math.min(1.0, t * 0.2 * intensity));
+                        ic.setXYZ(k, instCol.r, instCol.g, instCol.b);
+
+                        if (gm) {
+                            const gCol = b.clone().lerp(new THREE.Color(0xffffff), Math.min(1.0, t * 0.5 * intensity));
+                            gm.setXYZ(k, gCol.r, gCol.g, gCol.b);
+                        }
+                        if (hm) {
+                            const hCol = b.clone().lerp(new THREE.Color(0xffffff), Math.min(1.0, t * 0.7 * intensity));
+                            hm.setXYZ(k, hCol.r, hCol.g, hCol.b);
+                        }
+                    }
+                    try { ic.needsUpdate = true; } catch (e) {}
+                    try { if (gm) gm.needsUpdate = true; } catch (e) {}
+                    try { if (hm) hm.needsUpdate = true; } catch (e) {}
+                }
+            } catch (e) { /* tolerate mid-startup missing elements */ }
         });
         
         this.renderer.render(this.scene, this.camera);
